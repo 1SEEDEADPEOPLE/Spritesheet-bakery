@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>Sprite Baker</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#090909">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sprite Baker">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<!-- Upload -->
+<div id="upload-screen">
+  <div><div class="logo">SPRITE BAKER</div><div class="logo-rule"></div></div>
+  <div id="drop-zone" role="button" tabindex="0">
+    <svg class="dz-icon" width="46" height="46" viewBox="0 0 46 46" fill="none">
+      <path d="M23 7v24M14 16l9-9 9 9" stroke="#aaa" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="5" y="35" width="36" height="4" rx="2" stroke="#aaa" stroke-width="2.3"/>
+    </svg>
+    <span class="dz-label">Drop GLB / GLTF here</span>
+    <span class="dz-sub">or tap to browse</span>
+  </div>
+  <button class="tbtn" id="upload-proj-btn" style="margin-top:4px">📁 OPEN SAVED PROJECT</button>
+  <div class="upload-footer">OFFLINE · INSTALLABLE · WEBGL</div>
+  <input type="file" id="file-input" accept=".glb,.gltf">
+</div>
+
+<!-- Scene -->
+<div id="scene-screen">
+  <div id="topbar">
+    <span id="model-name">—</span>
+    <button class="tbtn" id="preview-btn">PREVIEW</button>
+    <button class="tbtn" id="cam-btn">ORTHO</button>
+    <button class="tbtn" id="bg-btn">BG</button>
+    <button class="tbtn" id="proj-btn">PROJ</button>
+    <button class="tbtn" id="new-btn">NEW</button>
+  </div>
+
+  <div id="viewport">
+    <div id="checker-bg"></div>
+    <div id="frame-guide"></div>
+    <canvas id="live-filter-canvas"></canvas>
+    <div id="cam-hud">DRAG · PINCH · SCROLL</div>
+  </div>
+
+  <div id="panel">
+    <!-- MODE -->
+    <div class="row">
+      <span class="lbl">MODE</span>
+      <div class="seg">
+        <button class="sbtn on" id="mode-anim">ANIM</button>
+        <button class="sbtn" id="mode-manual">MANUAL</button>
+      </div>
+    </div>
+
+    <!-- Clip selector (shared) -->
+    <div class="row" id="clip-row">
+      <span class="lbl">ANIM</span>
+      <select id="clip-sel"></select>
+      <button class="tbtn" id="play-btn">▶</button>
+    </div>
+
+    <!-- MANUAL-only section -->
+    <div id="manual-section" style="display:none">
+      <div class="row" id="scrub-row" style="display:none">
+        <span class="lbl">TIME</span>
+        <input type="range" id="time-scrub" min="0" max="1" step="0.001" value="0">
+        <span class="val-disp" id="time-val">0%</span>
+      </div>
+
+      <div class="divider"></div>
+      <div class="section-head">ROTATION ANCHOR</div>
+      <div class="row">
+        <span class="lbl">ANCH STEP</span>
+        <div class="seg">
+          <button class="sbtn" data-astep="0.1">0.1</button>
+          <button class="sbtn on" data-astep="0.25">0.25</button>
+          <button class="sbtn" data-astep="0.5">0.5</button>
+          <button class="sbtn" data-astep="1">1</button>
+        </div>
+        <button class="tbtn" id="anchor-reset" style="margin-left:auto">RST</button>
+      </div>
+      <div class="rot-row">
+        <span class="rot-axis">ANCH X</span>
+        <button class="rbtn" data-aaxis="x" data-dir="-1">−</button>
+        <span class="rot-val" id="anchor-x-val">0</span>
+        <button class="rbtn" data-aaxis="x" data-dir="1">+</button>
+      </div>
+      <div class="rot-row">
+        <span class="rot-axis">ANCH Y</span>
+        <button class="rbtn" data-aaxis="y" data-dir="-1">−</button>
+        <span class="rot-val" id="anchor-y-val">0</span>
+        <button class="rbtn" data-aaxis="y" data-dir="1">+</button>
+      </div>
+      <div class="rot-row">
+        <span class="rot-axis">ANCH Z</span>
+        <button class="rbtn" data-aaxis="z" data-dir="-1">−</button>
+        <span class="rot-val" id="anchor-z-val">0</span>
+        <button class="rbtn" data-aaxis="z" data-dir="1">+</button>
+      </div>
+
+      <div class="divider"></div>
+      <div class="row">
+        <button class="tbtn capture-btn" id="capture-btn">📸 CAPTURE FRAME</button>
+        <button class="tbtn" id="clear-frames-btn">CLEAR</button>
+      </div>
+      <div id="filmstrip"></div>
+    </div>
+
+    <!-- Frames + Res -->
+    <div class="row" id="frames-row">
+      <span class="lbl">FRAMES</span>
+      <input type="number" id="n-frames" value="12" min="1" max="256">
+      <span class="lbl" style="flex:0 0 28px;font-size:10px;text-align:right">RES</span>
+      <div class="seg">
+        <button class="sbtn" data-r="64">64</button>
+        <button class="sbtn" data-r="128">128</button>
+        <button class="sbtn" data-r="256">256</button>
+        <button class="sbtn" data-r="512">512</button>
+        <button class="sbtn on" data-r="1024">1024</button>
+      </div>
+    </div>
+    <div class="row" id="res-lock-note" style="display:none">
+      <span style="font-size:9px;color:var(--muted2)">RES locked while manual frames exist — CLEAR to change</span>
+    </div>
+
+    <!-- Layout -->
+    <div class="row">
+      <span class="lbl">LAYOUT</span>
+      <div class="seg" id="layout-seg">
+        <button class="sbtn on" data-layout="auto">AUTO</button>
+        <button class="sbtn" data-layout="1">1 ROW</button>
+        <button class="sbtn" data-layout="4">4 COL</button>
+        <button class="sbtn" data-layout="6">6 COL</button>
+        <button class="sbtn" data-layout="8">8 COL</button>
+        <button class="sbtn" data-layout="custom">COLS</button>
+      </div>
+      <input type="number" id="layout-cols-input" value="8" min="1" max="256" style="display:none;width:48px">
+    </div>
+
+    <!-- Autocrop + Exposure -->
+    <div class="row">
+      <span class="lbl">AUTOCROP</span>
+      <div class="seg">
+        <button class="sbtn on" id="crop-on">ON</button>
+        <button class="sbtn" id="crop-off">OFF</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="lbl">EXPOSURE</span>
+      <input type="range" id="exp-slider" min="0.3" max="2.5" step="0.05" value="1.0">
+      <span class="val-disp" id="exp-val">1.00</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Position offset -->
+    <div class="section-head">POSITION</div>
+    <div class="row">
+      <span class="lbl">POS STEP</span>
+      <div class="seg">
+        <button class="sbtn" data-pstep="0.1">0.1</button>
+        <button class="sbtn on" data-pstep="0.25">0.25</button>
+        <button class="sbtn" data-pstep="0.5">0.5</button>
+        <button class="sbtn" data-pstep="1">1</button>
+      </div>
+      <button class="tbtn" id="pos-reset" style="margin-left:auto">RST</button>
+    </div>
+    <div class="rot-row">
+      <span class="rot-axis">POS X</span>
+      <button class="rbtn" data-paxis="x" data-dir="-1">−</button>
+      <span class="rot-val" id="pos-x-val">0</span>
+      <button class="rbtn" data-paxis="x" data-dir="1">+</button>
+    </div>
+    <div class="rot-row">
+      <span class="rot-axis">POS Y</span>
+      <button class="rbtn" data-paxis="y" data-dir="-1">−</button>
+      <span class="rot-val" id="pos-y-val">0</span>
+      <button class="rbtn" data-paxis="y" data-dir="1">+</button>
+    </div>
+    <div class="rot-row">
+      <span class="rot-axis">POS Z</span>
+      <button class="rbtn" data-paxis="z" data-dir="-1">−</button>
+      <span class="rot-val" id="pos-z-val">0</span>
+      <button class="rbtn" data-paxis="z" data-dir="1">+</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Rotation -->
+    <div class="section-head">ROTATION</div>
+    <div class="row">
+      <span class="lbl" title="Degrees per +/− press">ROT STEP</span>
+      <div class="seg">
+        <button class="sbtn" data-snap="5">5°</button>
+        <button class="sbtn on" data-snap="10">10°</button>
+        <button class="sbtn" data-snap="15">15°</button>
+        <button class="sbtn" data-snap="45">45°</button>
+      </div>
+      <button class="tbtn" id="rot-reset" style="margin-left:auto">RST</button>
+    </div>
+    <div class="rot-row">
+      <span class="rot-axis">YAW Y</span>
+      <button class="rbtn" data-axis="y" data-dir="-1">−</button>
+      <span class="rot-val" id="yaw-val">0°</span>
+      <button class="rbtn" data-axis="y" data-dir="1">+</button>
+    </div>
+    <div class="rot-row">
+      <span class="rot-axis">PITCH X</span>
+      <button class="rbtn" data-axis="x" data-dir="-1">−</button>
+      <span class="rot-val" id="pitch-val">0°</span>
+      <button class="rbtn" data-axis="x" data-dir="1">+</button>
+    </div>
+    <div class="rot-row">
+      <span class="rot-axis">ROLL Z</span>
+      <button class="rbtn" data-axis="z" data-dir="-1">−</button>
+      <span class="rot-val" id="roll-val">0°</span>
+      <button class="rbtn" data-axis="z" data-dir="1">+</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Filter -->
+    <div class="section-head">FILTER</div>
+    <div class="row">
+      <span class="lbl">FILTER</span>
+      <select id="filter-sel">
+        <option value="none">— NONE</option>
+        <optgroup label="16-BIT">
+          <option value="pixel">PIXEL ART</option>
+          <option value="gameboy">GAME BOY</option>
+        </optgroup>
+        <optgroup label="MONO">
+          <option value="1bit">1-BIT DITHER</option>
+          <option value="silhouette">SILHOUETTE</option>
+        </optgroup>
+        <optgroup label="INK">
+          <option value="comic">COMIC INK</option>
+          <option value="cel">CEL-SHADE</option>
+          <option value="sumie">SUMI-E</option>
+        </optgroup>
+        <optgroup label="3D-ERA">
+          <option value="ps1">PS1 / PSX</option>
+        </optgroup>
+        <optgroup label="GRADE">
+          <option value="neon">NEON NOIR</option>
+        </optgroup>
+      </select>
+    </div>
+    <div class="row">
+      <span class="lbl">LIVE</span>
+      <div class="seg">
+        <button class="sbtn on" id="live-filter-off">OFF</button>
+        <button class="sbtn" id="live-filter-on">ON</button>
+      </div>
+      <span style="font-size:9px;color:var(--muted2);margin-left:6px">low-res preview</span>
+    </div>
+
+    <div id="fp-pixel" class="fp">
+      <div class="row"><span class="lbl">PX HEIGHT</span>
+        <div class="seg">
+          <button class="sbtn" data-ps="32">32</button><button class="sbtn on" data-ps="48">48</button>
+          <button class="sbtn" data-ps="64">64</button><button class="sbtn" data-ps="96">96</button>
+        </div>
+      </div>
+      <div class="row"><span class="lbl">SHADES</span>
+        <div class="seg">
+          <button class="sbtn" data-pl="4">4</button><button class="sbtn on" data-pl="6">6</button>
+          <button class="sbtn" data-pl="8">8</button><button class="sbtn" data-pl="16">16</button>
+        </div>
+      </div>
+      <div class="row"><span class="lbl">OUTLINE</span>
+        <div class="seg">
+          <button class="sbtn on" id="px-out-off">OFF</button>
+          <button class="sbtn" id="px-out-on">ON</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="fp-gameboy" class="fp">
+      <div class="row"><span class="lbl">PRESET</span>
+        <div class="seg">
+          <button class="sbtn on" data-gbp="dmg">DMG</button>
+          <button class="sbtn" data-gbp="grey">GREY</button>
+          <button class="sbtn" data-gbp="amber">AMBER</button>
+        </div>
+      </div>
+      <div class="row">
+        <span class="lbl">DARK</span><input type="color" id="gb-dark" value="#0f380f">
+        <span class="lbl" style="flex:0 0 36px">LIGHT</span><input type="color" id="gb-light" value="#9bbc0f">
+      </div>
+    </div>
+
+    <div id="fp-1bit" class="fp">
+      <div class="row">
+        <span class="lbl">DARK</span><input type="color" id="bit-dark" value="#000000">
+        <span class="lbl" style="flex:0 0 36px">LIGHT</span><input type="color" id="bit-light" value="#ffffff">
+      </div>
+    </div>
+
+    <div id="fp-silhouette" class="fp">
+      <div class="row"><span class="lbl">FILL</span><input type="color" id="sil-color" value="#080604"></div>
+    </div>
+
+    <div id="fp-comic" class="fp">
+      <div class="row"><span class="lbl">LEVELS</span>
+        <div class="seg">
+          <button class="sbtn" data-cl="3">3</button><button class="sbtn on" data-cl="4">4</button>
+          <button class="sbtn" data-cl="5">5</button><button class="sbtn" data-cl="6">6</button>
+        </div>
+      </div>
+      <div class="row"><span class="lbl">EDGE</span>
+        <div class="seg">
+          <button class="sbtn" data-ce="45">SOFT</button>
+          <button class="sbtn on" data-ce="28">MID</button>
+          <button class="sbtn" data-ce="14">HARD</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="fp-cel" class="fp">
+      <div class="row"><span class="lbl">BANDS</span>
+        <div class="seg">
+          <button class="sbtn" data-cb="3">3</button><button class="sbtn on" data-cb="4">4</button>
+          <button class="sbtn" data-cb="5">5</button><button class="sbtn" data-cb="6">6</button>
+        </div>
+      </div>
+      <div class="row"><span class="lbl">INK WIDTH</span>
+        <div class="seg">
+          <button class="sbtn" data-ciw="1">1px</button>
+          <button class="sbtn on" data-ciw="2">2px</button>
+          <button class="sbtn" data-ciw="3">3px</button>
+        </div>
+      </div>
+      <div class="row"><span class="lbl">HATCH</span>
+        <div class="seg">
+          <button class="sbtn on" data-hatch="off">OFF</button>
+          <button class="sbtn" data-hatch="light">LIGHT</button>
+          <button class="sbtn" data-hatch="heavy">HEAVY</button>
+        </div>
+      </div>
+      <div class="row">
+        <span class="lbl">SAT</span>
+        <input type="range" id="cel-sat" min="0.5" max="2.5" step="0.1" value="1.6">
+        <span class="val-disp" id="cel-sat-val">1.6</span>
+      </div>
+    </div>
+
+    <div id="fp-sumie" class="fp">
+      <div class="row">
+        <span class="lbl">INK</span>
+        <input type="range" id="sumie-ink" min="0.1" max="1.0" step="0.05" value="0.65">
+        <span class="val-disp" id="sumie-ink-val">0.65</span>
+      </div>
+      <div class="row">
+        <span class="lbl">WASH</span>
+        <input type="range" id="sumie-wash" min="0" max="50" step="5" value="20">
+        <span class="val-disp" id="sumie-wash-val">20</span>
+      </div>
+    </div>
+
+    <div id="fp-ps1" class="fp">
+      <div class="row"><span class="lbl">CHUNK</span>
+        <div class="seg">
+          <button class="sbtn" data-chunk="1">×1</button>
+          <button class="sbtn" data-chunk="2">×2</button>
+          <button class="sbtn on" data-chunk="4">×4</button>
+          <button class="sbtn" data-chunk="8">×8</button>
+        </div>
+      </div>
+      <div class="row"><span class="lbl">COLOR BITS</span>
+        <div class="seg">
+          <button class="sbtn" data-pbits="4">4-bit</button>
+          <button class="sbtn on" data-pbits="5">5-bit</button>
+          <button class="sbtn" data-pbits="6">6-bit</button>
+        </div>
+      </div>
+      <div class="row"><span class="lbl">DITHER</span>
+        <div class="seg">
+          <button class="sbtn on" id="ps1-dith-on">ON</button>
+          <button class="sbtn" id="ps1-dith-off">OFF</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="fp-neon" class="fp">
+      <div class="row">
+        <span class="lbl">SHADOW</span><input type="color" id="neon-dark" value="#05003c">
+        <span class="lbl" style="flex:0 0 44px">LIGHT</span><input type="color" id="neon-light" value="#00f0ff">
+      </div>
+      <div class="row">
+        <span class="lbl">BLOOM</span>
+        <input type="range" id="neon-bloom" min="0" max="3" step="0.5" value="1">
+        <span class="val-disp" id="neon-bloom-val">1.0</span>
+      </div>
+      <div class="row"><span class="lbl">SCANLINES</span>
+        <div class="seg">
+          <button class="sbtn on" id="neon-scan-on">ON</button>
+          <button class="sbtn" id="neon-scan-off">OFF</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <button id="bake-btn" disabled>⬡ &nbsp;BAKE SPRITESHEET</button>
+  </div>
+</div>
+
+<!-- Projects overlay -->
+<div class="overlay" id="projects-overlay">
+  <div class="ov-title">PROJECTS</div>
+  <div class="row" style="width:100%;max-width:320px">
+    <input type="text" id="save-name-input" placeholder="project name">
+    <button class="tbtn on" id="save-proj-btn">SAVE</button>
+  </div>
+  <div id="projects-list"></div>
+  <button class="back-btn" id="projects-close-btn">← CLOSE</button>
+</div>
+
+<!-- Progress -->
+<div class="overlay" id="prog-overlay">
+  <div class="ov-title" id="prog-title">RENDERING</div>
+  <div class="prog-track"><div class="prog-fill" id="prog-fill"></div></div>
+  <div class="prog-lbl" id="prog-lbl">0 / 0</div>
+</div>
+
+<!-- Result -->
+<div class="overlay" id="result-overlay">
+  <div class="ov-title">✦ DONE</div>
+  <canvas id="player-canvas"></canvas>
+  <div class="player-ctrl">
+    <button class="tbtn on" id="player-play-btn">⏸</button>
+    <span class="frame-ctr" id="frame-ctr">1 / 1</span>
+  </div>
+  <div class="fps-row">
+    <span>FPS</span>
+    <input type="range" id="fps-slider" min="1" max="60" value="12">
+    <span class="fps-val" id="fps-val">12</span>
+  </div>
+  <img id="sheet-strip" alt="sheet strip">
+  <div class="res-meta" id="res-meta"></div>
+  <div id="sheet-warn" class="warn" style="display:none"></div>
+  <div class="dl-row">
+    <button id="share-btn" class="dl-btn" style="display:none">⇪ SHARE</button>
+    <a id="dl-png" class="dl-btn" download="spritesheet.png">↓ PNG</a>
+    <a id="dl-json" class="dl-btn" download="spritesheet.json">↓ JSON</a>
+  </div>
+  <div class="save-tip">Tip: press &amp; hold the image above to save to Photos</div>
+  <button class="back-btn" id="back-btn">← BACK TO SCENE</button>
+</div>
+
+<script type="module" src="app.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(console.error));
+}
+</script>
+</body>
+</html>
